@@ -40,19 +40,21 @@
 
 using namespace LAMMPS_NS;
 using namespace MathConst;
+#include <iostream>
+using namespace std;
 
 /* ---------------------------------------------------------------------- */
 
 ComputeHexOrderAtom::ComputeHexOrderAtom(LAMMPS *lmp, int narg, char **arg) :
   Compute(lmp, narg, arg),
-  distsq(NULL), nearest(NULL), qnarray(NULL)
+  id_voro(NULL), vorolist(NULL), compute_voro(NULL), distsq(NULL), nearest(NULL), qnarray(NULL)
 {
   if (narg < 3 ) error->all(FLERR,"Illegal compute hexorder/atom command");
-
+  voro_neighbors = 0;
   ndegree = 6;
   nnn = 6;
   cutsq = 0.0;
-
+  voronummax = 0;
   // process optional args
 
   int iarg = 3;
@@ -80,7 +82,27 @@ ComputeHexOrderAtom::ComputeHexOrderAtom(LAMMPS *lmp, int narg, char **arg) :
         error->all(FLERR,"Illegal compute hexorder/atom command");
       cutsq = cutoff*cutoff;
       iarg += 2;
+    } else if (strcmp(arg[iarg],"voronoi") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal compute hexorder/atom command");
+      if (!atom->tag_enable) error->all(FLERR,"Compute hexorder/atom voronoi requires atom IDs");
+      if (!atom->map_style>0) error->all(FLERR,"Compute hexorder/atom voronoi requires atom_modify array or atom_modify hash");
+
+      id_voro = new char[strlen(arg[iarg+1])];
+      strcpy(id_voro, arg[iarg+1]);
+      voro_neighbors = 1;
+      iarg += 2;
     } else error->all(FLERR,"Illegal compute hexorder/atom command");
+  }
+
+  if(voro_neighbors) {
+    int icompute = modify->find_compute(id_voro);
+    if (icompute < 0) {
+      error->all(FLERR,"compute hexorder/atom could not find voronoi compute.");
+    }
+    compute_voro = modify->compute[icompute];
+    if(compute_voro->size_local_cols != 3) {
+      error->all(FLERR,"Voronoi compute not using neighbors");
+    }
   }
 
   ncol = 2;
@@ -98,6 +120,7 @@ ComputeHexOrderAtom::~ComputeHexOrderAtom()
   memory->destroy(qnarray);
   memory->destroy(distsq);
   memory->destroy(nearest);
+  memory->destroy(vorolist);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -141,8 +164,17 @@ void ComputeHexOrderAtom::compute_peratom()
   int i,j,ii,jj,inum,jnum;
   double xtmp,ytmp,ztmp,delx,dely,delz,rsq;
   int *ilist,*jlist,*numneigh,**firstneigh;
-
+  
   invoked_peratom = update->ntimestep;
+
+  if(voro_neighbors) {
+    compute_voro->compute_peratom();
+    if (compute_voro->size_local_rows > voronummax) {
+      memory->destroy(vorolist);
+      voronummax = compute_voro->size_local_rows;
+      memory->create(vorolist,voronummax,"hexorder/atom:vorolist");
+    }
+  }
 
   // grow order parameter array if necessary
 
@@ -177,6 +209,18 @@ void ComputeHexOrderAtom::compute_peratom()
       ztmp = x[i][2];
       jlist = firstneigh[i];
       jnum = numneigh[i];
+
+      if(voro_neighbors) {
+        jlist = vorolist;
+        jnum = 0;
+        for(int j=0; j<compute_voro->size_local_rows; j++) {
+          int atom1 = compute_voro->array_local[j][0];
+          int atom2 = compute_voro->array_local[j][1];
+          if(atom1==atom->tag[i] && atom2!=0) {
+            jlist[jnum++] = atom->map(atom2);
+          }
+        }
+      }
       
       // insure distsq and nearest arrays are long enough
 

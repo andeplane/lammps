@@ -23,7 +23,6 @@ ComputeStyle(hexorder/atom,ComputeHexOrderAtom)
 #include "compute.h"
 
 namespace LAMMPS_NS {
-
 class ComputeHexOrderAtom : public Compute {
  public:
   ComputeHexOrderAtom(class LAMMPS *, int, char **);
@@ -34,6 +33,11 @@ class ComputeHexOrderAtom : public Compute {
   double memory_usage();
 
  private:
+  int voro_neighbors;
+  char *id_voro;
+  int *vorolist;
+  int voronummax;
+  Compute *compute_voro;
   int nmax,maxneigh,ncol,nnn,ndegree;
   double cutsq;
   class NeighList *list;
