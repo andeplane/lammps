@@ -47,14 +47,14 @@ using namespace std;
 
 ComputeHexOrderAtom::ComputeHexOrderAtom(LAMMPS *lmp, int narg, char **arg) :
   Compute(lmp, narg, arg),
-  id_voro(NULL), vorolist(NULL), compute_voro(NULL), distsq(NULL), nearest(NULL), qnarray(NULL)
+  id_voro(NULL), vorolist(NULL), voronum(NULL), compute_voro(NULL), distsq(NULL), nearest(NULL), qnarray(NULL)
 {
   if (narg < 3 ) error->all(FLERR,"Illegal compute hexorder/atom command");
   voro_neighbors = 0;
   ndegree = 6;
   nnn = 6;
   cutsq = 0.0;
-  voronummax = 0;
+  voromaxrows = voromaxcolumns = 0;
   // process optional args
 
   int iarg = 3;
@@ -121,6 +121,7 @@ ComputeHexOrderAtom::~ComputeHexOrderAtom()
   memory->destroy(distsq);
   memory->destroy(nearest);
   memory->destroy(vorolist);
+  memory->destroy(voronum);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -169,15 +170,33 @@ void ComputeHexOrderAtom::compute_peratom()
 
   if(voro_neighbors) {
     compute_voro->compute_peratom();
-    if (compute_voro->size_local_rows > voronummax) {
+    if (compute_voro->size_local_rows > voromaxcolumns || atom->nlocal > voromaxrows) {
       memory->destroy(vorolist);
-      voronummax = compute_voro->size_local_rows;
-      memory->create(vorolist,voronummax,"hexorder/atom:vorolist");
+      memory->destroy(voronum);
+      voromaxcolumns = compute_voro->size_local_rows;
+      voromaxrows = atom->nlocal;
+      memory->create(vorolist,voromaxrows,voromaxcolumns,"hexorder/atom:vorolist");
+      memory->create(voronum,voromaxrows,"hexorder/atom:voronum");
+    }
+    
+    // Reset neighor count
+    for(int i=0; i<atom->nlocal; i++) {
+      voronum[i] = 0;
+    }
+
+    // Build voronoi neighbor list
+    for(int i=0; i<compute_voro->size_local_rows; i++) {
+      int atom1 = compute_voro->array_local[i][0];
+      int atom2 = compute_voro->array_local[i][1];
+      if(atom2!=0) { // It is a pair since atom2 is not zero
+        int indexi = atom->map(atom1);
+        int indexj = atom->map(atom2);
+        vorolist[indexi][voronum[indexi]++] = indexj;
+      }
     }
   }
-
+  
   // grow order parameter array if necessary
-
   if (atom->nmax > nmax) {
     memory->destroy(qnarray);
     nmax = atom->nmax;
@@ -211,15 +230,8 @@ void ComputeHexOrderAtom::compute_peratom()
       jnum = numneigh[i];
 
       if(voro_neighbors) {
-        jlist = vorolist;
-        jnum = 0;
-        for(int j=0; j<compute_voro->size_local_rows; j++) {
-          int atom1 = compute_voro->array_local[j][0];
-          int atom2 = compute_voro->array_local[j][1];
-          if(atom1==atom->tag[i] && atom2!=0) {
-            jlist[jnum++] = atom->map(atom2);
-          }
-        }
+        jlist = vorolist[i];
+        jnum = voronum[i];
       }
       
       // insure distsq and nearest arrays are long enough
@@ -251,36 +263,36 @@ void ComputeHexOrderAtom::compute_peratom()
         }
       }
 
-      // if not nnn neighbors, order parameter = 0;
+      // if not nnn neighbors, order parameter = 0 if not using voronoi
 
-      if (ncount < nnn) {
-	qn[0] = qn[1] = 0.0;
+      if (!voro_neighbors && ncount < nnn) {
+	      qn[0] = qn[1] = 0.0;
         continue;
       }
 
-      // if nnn > 0, use only nearest nnn neighbors
+      // if nnn > 0, use only nearest nnn neighbors if not using voronoi
 
-      if (nnn > 0) {
-	select2(nnn,ncount,distsq,nearest);
-	ncount = nnn;
+      if (!voro_neighbors && nnn > 0) {
+      	select2(nnn,ncount,distsq,nearest);
+      	ncount = nnn;
       }
 
       double usum = 0.0;
       double vsum = 0.0;
       
       for (jj = 0; jj < ncount; jj++) {
-	j = nearest[jj];
-	j &= NEIGHMASK;
-	
-	delx = xtmp - x[j][0];
-	dely = ytmp - x[j][1];
-	double u, v;
-	calc_qn_complex(delx, dely, u, v);
-	usum += u;
-	vsum += v;
+      	j = nearest[jj];
+      	j &= NEIGHMASK;
+      	
+      	delx = xtmp - x[j][0];
+      	dely = ytmp - x[j][1];
+      	double u, v;
+      	calc_qn_complex(delx, dely, u, v);
+      	usum += u;
+      	vsum += v;
       }
-      qn[0] = usum/nnn;
-      qn[1] = vsum/nnn;
+      qn[0] = usum/ncount;
+      qn[1] = vsum/ncount;
     }
   }
 }

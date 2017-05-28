@@ -35,8 +35,10 @@ class ComputeHexOrderAtom : public Compute {
  private:
   int voro_neighbors;
   char *id_voro;
-  int *vorolist;
-  int voronummax;
+  int **vorolist;
+  int *voronum;
+  int voromaxrows;
+  int voromaxcolumns;
   Compute *compute_voro;
   int nmax,maxneigh,ncol,nnn,ndegree;
   double cutsq;
