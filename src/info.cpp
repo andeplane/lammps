@@ -339,10 +339,10 @@ void Info::command(int narg, char **arg)
             (double)pmc.PeakWorkingSetSize/1048576.0);
 #else
 #if defined(__linux)
-    struct mallinfo mi;
-    mi = mallinfo();
-    fprintf(out,"Current reserved memory pool size: %.4g Mbyte\n",
-            (double)mi.uordblks/1048576.0+(double)mi.hblkhd/1048576.0);
+    // struct mallinfo mi;
+    // mi = mallinfo();
+    // fprintf(out,"Current reserved memory pool size: %.4g Mbyte\n",
+    //         (double)mi.uordblks/1048576.0+(double)mi.hblkhd/1048576.0);
 #endif
     struct rusage ru;
     if (getrusage(RUSAGE_SELF, &ru) == 0) {
