@@ -79,28 +79,67 @@ public:
 
   KOKKOS_INLINE_FUNCTION
   AtomNeighbors get_neighbors(const int &i) const {
-    return AtomNeighbors(&d_neighbors(i,0),d_numneigh(i),
-                         &d_neighbors(i,1)-&d_neighbors(i,0));
+    // Bypass View runtime check for MEMORY64 + pthreads compatibility
+    auto& d_neighb_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_neighbors_2d&>(d_neighbors);
+    auto& d_numneigh_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_int_1d&>(d_numneigh);
+    int* neighb_data = d_neighb_nonconst.data();
+    int* numneigh_data = d_numneigh_nonconst.data();
+    const size_t offset = i * d_neighbors.stride_0();
+    int* firstneigh_ptr = neighb_data + offset;
+    const int numneigh = numneigh_data[i];
+    const int stride = static_cast<int>(d_neighbors.stride_1());
+    return AtomNeighbors(firstneigh_ptr, numneigh, stride);
   }
 
   KOKKOS_INLINE_FUNCTION
   AtomNeighbors get_neighbors_transpose(const int &i) const {
-    return AtomNeighbors(&d_neighbors_transpose(i,0),d_numneigh(i),
-                         &d_neighbors_transpose(i,1)-&d_neighbors_transpose(i,0));
+    // Bypass View runtime check for MEMORY64 + pthreads compatibility
+    auto& d_neighb_t_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_neighbors_2d_lr&>(d_neighbors_transpose);
+    auto& d_numneigh_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_int_1d&>(d_numneigh);
+    int* neighb_data = d_neighb_t_nonconst.data();
+    int* numneigh_data = d_numneigh_nonconst.data();
+    const size_t offset = i * d_neighbors_transpose.stride_0();
+    int* firstneigh_ptr = neighb_data + offset;
+    const int numneigh = numneigh_data[i];
+    const int stride = static_cast<int>(d_neighbors_transpose.stride_1());
+    return AtomNeighbors(firstneigh_ptr, numneigh, stride);
   }
 
   KOKKOS_INLINE_FUNCTION
   static AtomNeighborsConst static_neighbors_const(int i,
            typename ArrayTypes<DeviceType>::t_neighbors_2d_const const& d_neighbors,
            typename ArrayTypes<DeviceType>::t_int_1d_const const& d_numneigh) {
-    return AtomNeighborsConst(&d_neighbors(i,0),d_numneigh(i),
-                              &d_neighbors(i,1)-&d_neighbors(i,0));
+    // Bypass View runtime check for MEMORY64 + pthreads compatibility
+    auto& d_neighb_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_neighbors_2d_const&>(d_neighbors);
+    auto& d_numneigh_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_int_1d_const&>(d_numneigh);
+    const int* neighb_data = d_neighb_nonconst.data();
+    const int* numneigh_data = d_numneigh_nonconst.data();
+    const size_t offset = i * d_neighbors.stride_0();
+    const int* firstneigh_ptr = neighb_data + offset;
+    const int numneigh = numneigh_data[i];
+    const int stride = static_cast<int>(d_neighbors.stride_1());
+    return AtomNeighborsConst(firstneigh_ptr, numneigh, stride);
   }
 
   KOKKOS_INLINE_FUNCTION
   AtomNeighborsConst get_neighbors_const(const int &i) const {
-    return AtomNeighborsConst(&d_neighbors(i,0),d_numneigh(i),
-                              &d_neighbors(i,1)-&d_neighbors(i,0));
+    // Bypass View's runtime check by using const_cast and direct memory access
+    // This is a workaround for MEMORY64 + pthreads compatibility issue
+    auto& d_neighb_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_neighbors_2d&>(d_neighbors);
+    auto& d_numneigh_nonconst = const_cast<typename ArrayTypes<DeviceType>::t_int_1d&>(d_numneigh);
+    
+    // Use raw data access to avoid runtime checks
+    int* neighb_data = d_neighb_nonconst.data();
+    int* numneigh_data = d_numneigh_nonconst.data();
+    
+    // Calculate pointers manually using strides
+    const size_t stride_0 = d_neighbors.stride_0();
+    const size_t offset = i * stride_0;
+    const int* firstneigh_ptr = neighb_data + offset;
+    const int numneigh = numneigh_data[i];
+    const int stride = static_cast<int>(d_neighbors.stride_1());
+    
+    return AtomNeighborsConst(firstneigh_ptr, numneigh, stride);
   }
 
   KOKKOS_INLINE_FUNCTION

@@ -7,7 +7,7 @@ units           lj
 atom_style      atomic/kk
 
 lattice         fcc 0.8442
-region          box block 0 4 0 4 0 4
+region          box block 0 10 0 10 0 10
 create_box      1 box
 run_style       verlet/kk
 create_atoms    1 box
@@ -24,5 +24,5 @@ neigh_modify    delay 0 every 20 check no
 fix             1 all nve
 
 thermo          50
-run             250
+run             1000
 

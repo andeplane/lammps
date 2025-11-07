@@ -19,14 +19,14 @@ emcmake cmake ../cmake \
   -DPKG_KOKKOS=ON \
   -DKokkos_ENABLE_THREADS=ON \
   -DKokkos_ENABLE_LIBDL=OFF \
+  -DKokkos_ENABLE_DEBUG_BOUNDS_CHECK=OFF \
+  -DKokkos_ENABLE_DEBUG=OFF \
   -DCMAKE_CXX_STANDARD=17 \
   -DCMAKE_CXX_STANDARD_REQUIRED=ON \
   -DCMAKE_CXX_FLAGS="-sMEMORY64=2" \
   -DCMAKE_C_FLAGS="-sMEMORY64=2"
 
 # Now add pthread to compiler flags for the actual build
-# Note: We skip adding complex linker flags here to avoid breaking CMake's test compilations
-# These will need to be added directly to the lmp target in CMakeLists.txt or during the make step
 EMSCRIPTEN_COMPILE_FLAGS="-pthread -sMEMORY64=2"
 
 emcmake cmake \

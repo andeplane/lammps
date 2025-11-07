@@ -3,8 +3,9 @@
 /**
  * Simple Node.js test script for LAMMPS compiled with Emscripten
  * 
- * Usage: node run.js [input_file]
+ * Usage: node run.js [input_file] [num_threads]
  * Default input file: lj.in
+ * Default num_threads: 1
  */
 
 const fs = require('fs');
@@ -23,8 +24,9 @@ createModule({
 }).then((Module) => {
   console.log('LAMMPS module loaded successfully');
   
-  // Get input file (default to lj.in)
+  // Get input file (default to lj.in) and number of threads
   const inputFile = process.argv[2] || 'lj.in';
+  const numThreads = parseInt(process.argv[3]) || 1;
   
   if (!fs.existsSync(inputFile)) {
     console.error(`Error: Input file '${inputFile}' not found`);
@@ -32,13 +34,14 @@ createModule({
   }
   
   console.log(`Running LAMMPS with input file: ${inputFile}`);
+  console.log(`Using ${numThreads} thread(s)`);
   
   // Read input file content
   const inputContent = fs.readFileSync(inputFile, 'utf8');
   
-  // Initialize LAMMPS with Kokkos enabled (-k on)
-  // We need to create an argv array: ["lmp", "-k", "on"]
-  const args = ["lmp", "-k", "on"];
+  // Initialize LAMMPS with Kokkos enabled (-k on t <num_threads>)
+  // We need to create an argv array: ["lmp", "-k", "on", "t", "numThreads"]
+  const args = ["lmp", "-k", "on", "t", numThreads.toString()];
   const argc = args.length;
   
   // Allocate each string
