@@ -205,7 +205,9 @@ if(EMSCRIPTEN)
     "-sASYNCIFY"
     "-sFORCE_FILESYSTEM=1"
     "-sEXPORT_NAME=createModule"
-    "-sEXPORTED_RUNTIME_METHODS=['getValue','FS','HEAP32','HEAPF32','HEAPF64','allocateUTF8','stringToUTF8','UTF8ToString','setValue']"
+    "-sMODULARIZE=1"
+    "-sEXPORT_ES6=0"
+    "-sEXPORTED_RUNTIME_METHODS=['getValue','FS','HEAP32','HEAP64','HEAPF32','HEAPF64','allocateUTF8','stringToUTF8','UTF8ToString','setValue','stackAlloc']"
     "-sEXPORTED_FUNCTIONS=['_lammps_open_no_mpi','_lammps_close','_lammps_commands_string','_lammps_file','_lammps_command']"
   )
   target_link_options(lmp PRIVATE ${EMSCRIPTEN_LINK_FLAGS})
