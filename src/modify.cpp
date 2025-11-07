@@ -807,7 +807,7 @@ Fix *Modify::add_fix(int narg, char **arg, int trysuffix)
   // nullptr must be last entry in this list
 
   const char *exceptions[] = {"GPU",   "OMP", "INTEL",      "property/atom", "cmap",
-                              "cmap3", "rx",  "deprecated", "STORE/KIM",     nullptr};
+                              "cmap3", "rx",  "deprecated", "STORE/KIM", "atomify",     nullptr};
 
   if (domain->box_exist == 0) {
     int m;

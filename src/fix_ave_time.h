@@ -38,6 +38,12 @@ class FixAveTime : public Fix {
   double compute_scalar() override;
   double compute_vector(int) override;
   double compute_array(int, int) override;
+  bigint nextvalid();
+  int getmode() { return mode; }
+  int getnvalues() { return nvalues; }
+  int getnrows() { return nrows; }
+  char **getids() { return ids; }
+  int *getwhich() { return which; }
 
  private:
   int me, nvalues;
@@ -77,7 +83,6 @@ class FixAveTime : public Fix {
   void invoke_vector(bigint);
   void options(int, int, char **);
   void allocate_arrays();
-  bigint nextvalid();
 };
 
 }    // namespace LAMMPS_NS

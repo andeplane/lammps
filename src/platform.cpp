@@ -141,11 +141,11 @@ double platform::cputime()
 
 #else /* ! _WIN32 */
 
-  struct rusage ru;
-  if (getrusage(RUSAGE_SELF, &ru) == 0) {
-    rv = (double) ru.ru_utime.tv_sec;
-    rv += (double) ru.ru_utime.tv_usec * 0.000001;
-  }
+  // struct rusage ru;
+  // if (getrusage(RUSAGE_SELF, &ru) == 0) {
+  //   rv = (double) ru.ru_utime.tv_sec;
+  //   rv += (double) ru.ru_utime.tv_usec * 0.000001;
+  // }
 
 #endif
 

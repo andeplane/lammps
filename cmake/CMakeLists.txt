@@ -177,7 +177,9 @@ endif()
 include(GNUInstallDirs)
 file(GLOB ALL_SOURCES ${LAMMPS_SOURCE_DIR}/[^.]*.cpp)
 file(GLOB MAIN_SOURCES ${LAMMPS_SOURCE_DIR}/main.cpp)
+file(GLOB COLVAR_SOURCES ${LAMMPS_SOURCE_DIR}/colvar*.cpp)
 list(REMOVE_ITEM ALL_SOURCES ${MAIN_SOURCES})
+list(REMOVE_ITEM ALL_SOURCES ${COLVAR_SOURCES})
 add_library(lammps ${ALL_SOURCES})
 
 # tell CMake to export all symbols to a .dll on Windows with MinGW cross-compilers
@@ -188,6 +190,27 @@ endif()
 add_executable(lmp ${MAIN_SOURCES})
 target_link_libraries(lmp PRIVATE lammps)
 set_target_properties(lmp PROPERTIES OUTPUT_NAME ${LAMMPS_BINARY})
+
+# Add Emscripten-specific flags for WebAssembly
+if(EMSCRIPTEN)
+  # Disable Kokkos stacktrace (requires execinfo.h which isn't available in Emscripten)
+  # We can't use target_compile_definitions with -U, so we add it to compile flags instead
+  target_compile_options(lammps PRIVATE -UKOKKOS_IMPL_ENABLE_STACKTRACE -UKOKKOS_IMPL_ENABLE_CXXABI)
+  
+  set(EMSCRIPTEN_LINK_FLAGS
+    "-pthread"
+    "-sMEMORY64=2"
+    "-sNO_DISABLE_EXCEPTION_CATCHING=1"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sASYNCIFY"
+    "-sFORCE_FILESYSTEM=1"
+    "-sEXPORT_NAME=createModule"
+    "-sEXPORTED_RUNTIME_METHODS=['getValue','FS','HEAP32','HEAPF32','HEAPF64','allocateUTF8','stringToUTF8','UTF8ToString','setValue']"
+    "-sEXPORTED_FUNCTIONS=['_lammps_open_no_mpi','_lammps_close','_lammps_commands_string','_lammps_file','_lammps_command']"
+  )
+  target_link_options(lmp PRIVATE ${EMSCRIPTEN_LINK_FLAGS})
+endif()
+
 install(TARGETS lmp EXPORT LAMMPS_Targets DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 option(CMAKE_VERBOSE_MAKEFILE "Generate verbose Makefiles" OFF)

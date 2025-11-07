@@ -1326,9 +1326,9 @@ void Info::get_memory_info(double *meminfo)
 #endif
     meminfo[1] = (double)mi.uordblks/1048576.0+(double)mi.hblkhd/1048576.0;
 #endif
-    struct rusage ru;
-    if (getrusage(RUSAGE_SELF, &ru) == 0)
-      meminfo[2] = (double)ru.ru_maxrss/1024.0;
+    // struct rusage ru;
+    // if (getrusage(RUSAGE_SELF, &ru) == 0)
+    //   meminfo[2] = (double)ru.ru_maxrss/1024.0;
 #endif
 }
 

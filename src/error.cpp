@@ -162,8 +162,8 @@ void Error::all(const std::string &file, int line, const std::string &str)
 
   if (update) update->whichflag = 0;
 
-  std::string msg = fmt::format("ERROR: {} ({}:{})\n",
-                                str, truncpath(file), line);
+  std::string msg = fmt::format("ERROR: {} ({}:{})\nLast command: {}",
+                                str, truncpath(file), line, lastcmd);
 
   if (universe->nworlds > 1) {
     throw LAMMPSAbortException(msg, universe->uworld);

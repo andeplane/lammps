@@ -27,6 +27,7 @@ class NeighRequest : protected Pointers {
   friend class NeighborKokkos;
   friend class NPairSkipIntel;
   friend class FixIntel;
+  friend class FixAtomify;
 
  protected:
   int index;                 // index of which neigh request this is
