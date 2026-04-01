@@ -1,0 +1,224 @@
+# ============================================================
+# GPT-2 124M Forward Pass via Molecular Dynamics
+#
+# Every neural network operation is computed by energy
+# minimization of particles in LAMMPS. No Python. No external
+# code. Just physics.
+#
+# Particle layout:
+#   Atoms 1-768:     bufA (main activation, d_model=768)
+#   Atoms 769-3840:  bufB (scratch, up to 3072 for FFN)
+#
+# Run: lmp -in in.gpt2
+# Prereq: python prepare_weights.py "Your prompt here"
+# ============================================================
+
+units           lj
+atom_style      atomic
+boundary        s s s
+atom_modify     map array sort 0 0.0
+
+read_data       gpt2.data
+
+# --- Per-atom storage for residual connections ---
+fix             prop all property/atom d_residual
+
+# --- Atom groups ---
+group           bufA id 1:768
+group           bufB id 769:3840
+group           bufB_qkv id 769:3072
+group           bufB_v id 2305:3072
+group           bufB_3072 id 769:3840
+
+# --- Neighbor list: N-squared (no bins, avoids box-size issues) ---
+neighbor        0 nsq
+neigh_modify    once yes
+
+# --- Atom-style variables (lazy evaluation, defined once) ---
+variable        save_x atom x
+variable        add_residual atom x+d_residual
+
+# --- Minimizer tolerances ---
+variable        cg_etol equal 1.0e-20
+variable        cg_ftol equal 1.0e-20
+variable        fire_etol equal 1.0e-15
+variable        fire_ftol equal 1.0e-15
+variable        maxiter equal 100000
+variable        maxeval equal 100000
+
+# --- Logging ---
+thermo          0
+thermo_style    custom step pe fnorm
+
+# ============================================================
+# TRANSFORMER BLOCK LOOP (blocks 0-11)
+# ============================================================
+variable        block loop 0 11
+label           block_loop
+
+print           "=== Block ${block} ==="
+
+# ----------------------------------------------------------
+# Save bufA -> d_residual for first residual connection
+# ----------------------------------------------------------
+set             group bufA d_residual v_save_x
+
+# ----------------------------------------------------------
+# Layer Norm 1 (in-place on bufA)
+# ----------------------------------------------------------
+pair_style      zero 0.1
+pair_coeff      * *
+fix             ln1 bufA neural/layernorm weights/block_${block}_ln1.dat
+fix_modify      ln1 energy yes
+min_style       fire
+minimize        ${fire_etol} ${fire_ftol} ${maxiter} ${maxeval}
+unfix           ln1
+print           "  LN1 done"
+
+# ----------------------------------------------------------
+# QKV Linear: bufA(1-768) -> bufB_qkv(769-3072)
+# ----------------------------------------------------------
+set             group bufB_qkv x 0.0
+pair_style      neural weights/block_${block}_qkv_w.dat 5000.0 nocheck
+pair_coeff      * *
+fix             freeze_in bufA setforce 0.0 0.0 0.0
+fix             self_out bufB_qkv neural/self
+fix_modify      self_out energy yes
+fix             bias_out bufB_qkv neural/bias weights/block_${block}_qkv_b.dat
+fix_modify      bias_out energy yes
+min_style       cg
+minimize        ${cg_etol} ${cg_ftol} ${maxiter} ${maxeval}
+unfix           freeze_in
+unfix           self_out
+unfix           bias_out
+print           "  QKV done"
+
+# ----------------------------------------------------------
+# Attention: T=1 shortcut -- output = V (atoms 2305-3072)
+# No computation needed.
+# ----------------------------------------------------------
+
+# ----------------------------------------------------------
+# c_proj Linear: bufB_v(2305-3072) -> bufA(1-768)
+# ----------------------------------------------------------
+set             group bufA x 0.0
+pair_style      neural weights/block_${block}_cproj_w.dat 5000.0 nocheck
+pair_coeff      * *
+fix             freeze_in bufB setforce 0.0 0.0 0.0
+fix             self_out bufA neural/self
+fix_modify      self_out energy yes
+fix             bias_out bufA neural/bias weights/block_${block}_cproj_b.dat
+fix_modify      bias_out energy yes
+min_style       cg
+minimize        ${cg_etol} ${cg_ftol} ${maxiter} ${maxeval}
+unfix           freeze_in
+unfix           self_out
+unfix           bias_out
+print           "  c_proj done"
+
+# ----------------------------------------------------------
+# Residual 1: bufA = bufA + d_residual
+# ----------------------------------------------------------
+set             group bufA x v_add_residual
+
+# ----------------------------------------------------------
+# Save bufA -> d_residual for second residual connection
+# ----------------------------------------------------------
+set             group bufA d_residual v_save_x
+
+# ----------------------------------------------------------
+# Layer Norm 2 (in-place on bufA)
+# ----------------------------------------------------------
+pair_style      zero 0.1
+pair_coeff      * *
+fix             ln2 bufA neural/layernorm weights/block_${block}_ln2.dat
+fix_modify      ln2 energy yes
+min_style       fire
+minimize        ${fire_etol} ${fire_ftol} ${maxiter} ${maxeval}
+unfix           ln2
+print           "  LN2 done"
+
+# ----------------------------------------------------------
+# FFN c_fc Linear: bufA(1-768) -> bufB_3072(769-3840)
+# ----------------------------------------------------------
+set             group bufB_3072 x 0.0
+pair_style      neural weights/block_${block}_fc_w.dat 5000.0 nocheck
+pair_coeff      * *
+fix             freeze_in bufA setforce 0.0 0.0 0.0
+fix             self_out bufB_3072 neural/self
+fix_modify      self_out energy yes
+fix             bias_out bufB_3072 neural/bias weights/block_${block}_fc_b.dat
+fix_modify      bias_out energy yes
+min_style       cg
+minimize        ${cg_etol} ${cg_ftol} ${maxiter} ${maxeval}
+unfix           freeze_in
+unfix           self_out
+unfix           bias_out
+print           "  c_fc done"
+
+# ----------------------------------------------------------
+# GELU (in-place on bufB_3072)
+# ----------------------------------------------------------
+pair_style      zero 0.1
+pair_coeff      * *
+fix             gelu bufB_3072 neural/gelu
+fix_modify      gelu energy yes
+min_style       fire
+minimize        ${fire_etol} ${fire_ftol} ${maxiter} ${maxeval}
+unfix           gelu
+print           "  GELU done"
+
+# ----------------------------------------------------------
+# FFN c_proj Linear: bufB_3072(769-3840) -> bufA(1-768)
+# ----------------------------------------------------------
+set             group bufA x 0.0
+pair_style      neural weights/block_${block}_fcproj_w.dat 5000.0 nocheck
+pair_coeff      * *
+fix             freeze_in bufB_3072 setforce 0.0 0.0 0.0
+fix             self_out bufA neural/self
+fix_modify      self_out energy yes
+fix             bias_out bufA neural/bias weights/block_${block}_fcproj_b.dat
+fix_modify      bias_out energy yes
+min_style       cg
+minimize        ${cg_etol} ${cg_ftol} ${maxiter} ${maxeval}
+unfix           freeze_in
+unfix           self_out
+unfix           bias_out
+print           "  c_proj_ffn done"
+
+# ----------------------------------------------------------
+# Residual 2: bufA = bufA + d_residual
+# ----------------------------------------------------------
+set             group bufA x v_add_residual
+
+print           "=== Block ${block} complete ==="
+
+# --- Loop ---
+next            block
+jump            SELF block_loop
+
+# ============================================================
+# FINAL LAYER NORM
+# ============================================================
+print           "=== Final Layer Norm ==="
+pair_style      zero 0.1
+pair_coeff      * *
+fix             ln_f bufA neural/layernorm weights/ln_f.dat
+fix_modify      ln_f energy yes
+min_style       fire
+minimize        ${fire_etol} ${fire_ftol} ${maxiter} ${maxeval}
+unfix           ln_f
+
+# ============================================================
+# OUTPUT: Dump final activations
+# ============================================================
+dump            result bufA custom 1 activations.dump id x
+dump_modify     result sort id format float "%.15e"
+run             0
+undump          result
+
+print           "============================================"
+print           "GPT-2 forward pass complete."
+print           "Final activations written to activations.dump"
+print           "Run: python compute_logits.py"
+print           "============================================"
